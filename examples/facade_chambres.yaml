@@ -1,0 +1,19 @@
+alias: Facade chambres - cover control
+use_blueprint:
+  path: facade_cover_control.yaml
+  input:
+    covers:
+      - cover.volet_chambre_verte
+      - cover.volet_chambre_ambre
+    sun_direct_sensor: binary_sensor.facade_sud_sun_direct
+    weather_entity: weather.tacoignieres
+    heat_threshold: 25
+    monday_open_time: "07:30:00"
+    tuesday_open_time: "07:30:00"
+    wednesday_open_time: "07:30:00"
+    thursday_open_time: "07:30:00"
+    friday_open_time: "07:30:00"
+    saturday_open_time: "09:00:00"
+    sunday_open_time: "09:00:00"
+    hot_after_sun_action: partial_open
+    hot_after_sun_position: 50

@@ -1,0 +1,11 @@
+# Secrets and local files
+.env
+*.env
+.env.*
+secrets.yaml
+known_devices.yaml
+.storage/
+.cloud/
+*.log
+__pycache__/
+.DS_Store

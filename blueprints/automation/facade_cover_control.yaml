@@ -1,0 +1,408 @@
+blueprint:
+  name: Volets façade chaleur/saison v0.1
+  description: >
+    Gestion locale de volets par façade : horaires selon jour/travail/férié/vacances,
+    blocage d'ouverture les journées chaudes selon prévision météo daily, réouverture
+    optionnelle quand le soleil ne tape plus sur la façade, fermeture au coucher du
+    soleil avec offset mensuel réglable. V0.1 volontairement simple : nécessite un
+    binary_sensor "soleil direct façade" par façade.
+  domain: automation
+  input:
+    covers:
+      name: Volets de cette façade
+      description: Liste des volets à piloter ensemble pour cette exposition.
+      selector:
+        entity:
+          domain: cover
+          multiple: true
+
+    sun_direct_sensor:
+      name: Capteur soleil direct façade
+      description: Binary sensor à on quand le soleil tape sur cette façade/fenêtre solaire.
+      selector:
+        entity:
+          domain: binary_sensor
+
+    weather_entity:
+      name: Entité météo pour prévision max du jour
+      description: Utilisée avec weather.get_forecasts type daily.
+      selector:
+        entity:
+          domain: weather
+
+    heat_threshold:
+      name: Seuil journée chaude
+      description: Si température max prévue >= seuil, l'ouverture matin est bloquée.
+      default: 25
+      selector:
+        number:
+          min: 15
+          max: 45
+          step: 0.5
+          unit_of_measurement: °C
+          mode: box
+
+    respect_sunrise:
+      name: Respecter le lever du soleil
+      description: Si activé, n'ouvre pas avant que sun.sun soit au-dessus de l'horizon.
+      default: true
+      selector:
+        boolean: {}
+
+    monday_open_time:
+      name: Ouverture lundi
+      default: "07:30:00"
+      selector: { time: {} }
+    tuesday_open_time:
+      name: Ouverture mardi
+      default: "07:30:00"
+      selector: { time: {} }
+    wednesday_open_time:
+      name: Ouverture mercredi
+      default: "07:30:00"
+      selector: { time: {} }
+    thursday_open_time:
+      name: Ouverture jeudi
+      default: "07:30:00"
+      selector: { time: {} }
+    friday_open_time:
+      name: Ouverture vendredi
+      default: "07:30:00"
+      selector: { time: {} }
+    saturday_open_time:
+      name: Ouverture samedi
+      default: "09:00:00"
+      selector: { time: {} }
+    sunday_open_time:
+      name: Ouverture dimanche
+      default: "09:00:00"
+      selector: { time: {} }
+
+    workday_sensor:
+      name: Capteur jour travaillé optionnel
+      description: Si renseigné, on utilise workday_open_time quand on, non_workday_open_time quand off.
+      default: ""
+      selector:
+        entity:
+          domain: binary_sensor
+    workday_open_time:
+      name: Heure jour travaillé
+      default: "07:30:00"
+      selector: { time: {} }
+    non_workday_open_time:
+      name: Heure jour non travaillé
+      default: "09:00:00"
+      selector: { time: {} }
+
+    holiday_sensor:
+      name: Capteur jour férié optionnel
+      default: ""
+      selector:
+        entity:
+          domain: binary_sensor
+    holiday_open_time:
+      name: Heure jour férié
+      default: "09:00:00"
+      selector: { time: {} }
+
+    vacation_sensor:
+      name: Capteur vacances optionnel
+      default: ""
+      selector:
+        entity:
+          domain: binary_sensor
+    vacation_mode:
+      name: Comportement en vacances
+      default: normal
+      selector:
+        select:
+          options:
+            - label: Normal
+              value: normal
+            - label: Garder fermé
+              value: keep_closed
+            - label: Ouvrir partiellement
+              value: partial_open
+    vacation_open_time:
+      name: Heure vacances
+      default: "10:00:00"
+      selector: { time: {} }
+    vacation_open_position:
+      name: Position ouverture vacances
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 5
+          unit_of_measurement: "%"
+          mode: slider
+
+    absence_sensor:
+      name: Capteur absence/sécurité optionnel
+      description: Si on, bloque les ouvertures automatiques. La fermeture soir reste active.
+      default: ""
+      selector:
+        entity:
+          domain: binary_sensor
+
+    hot_after_sun_action:
+      name: Action journée chaude après fin du soleil façade
+      description: Que faire quand journée chaude et que le soleil ne tape plus sur cette façade.
+      default: partial_open
+      selector:
+        select:
+          options:
+            - label: Ne rien faire
+              value: none
+            - label: Ouvrir partiellement
+              value: partial_open
+            - label: Ouvrir complètement
+              value: full_open
+    hot_after_sun_position:
+      name: Position réouverture partielle journée chaude
+      default: 40
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 5
+          unit_of_measurement: "%"
+          mode: slider
+
+    open_window_minutes:
+      name: Fenêtre d'ouverture normale
+      description: Durée après l'heure d'ouverture pendant laquelle le blueprint peut ouvrir. Limite les réouvertures après fermeture manuelle.
+      default: 45
+      selector:
+        number:
+          min: 5
+          max: 180
+          step: 5
+          unit_of_measurement: min
+          mode: slider
+
+    close_offset_jan:
+      name: Offset fermeture janvier
+      default: -15
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+    close_offset_feb:
+      name: Offset fermeture février
+      default: -10
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+    close_offset_mar:
+      name: Offset fermeture mars
+      default: 0
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+    close_offset_apr:
+      name: Offset fermeture avril
+      default: 15
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+    close_offset_may:
+      name: Offset fermeture mai
+      default: 30
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+    close_offset_jun:
+      name: Offset fermeture juin
+      default: 45
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+    close_offset_jul:
+      name: Offset fermeture juillet
+      default: 45
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+    close_offset_aug:
+      name: Offset fermeture août
+      default: 35
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+    close_offset_sep:
+      name: Offset fermeture septembre
+      default: 20
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+    close_offset_oct:
+      name: Offset fermeture octobre
+      default: 5
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+    close_offset_nov:
+      name: Offset fermeture novembre
+      default: -5
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+    close_offset_dec:
+      name: Offset fermeture décembre
+      default: -15
+      selector: { number: { min: -120, max: 120, step: 5, unit_of_measurement: min, mode: box } }
+
+trigger:
+  - platform: time_pattern
+    minutes: "/5"
+    id: tick
+  - platform: homeassistant
+    event: start
+    id: start
+  - platform: state
+    entity_id: !input sun_direct_sensor
+    from: "on"
+    to: "off"
+    id: facade_clear
+  - platform: sun
+    event: sunrise
+    id: sunrise
+  - platform: sun
+    event: sunset
+    id: sunset
+
+mode: single
+max_exceeded: silent
+
+action:
+  - service: weather.get_forecasts
+    target:
+      entity_id: !input weather_entity
+    data:
+      type: daily
+    response_variable: daily_forecast
+
+  - variables:
+      covers: !input covers
+      sun_direct_sensor: !input sun_direct_sensor
+      weather_entity: !input weather_entity
+      heat_threshold: !input heat_threshold
+      respect_sunrise: !input respect_sunrise
+      workday_sensor: !input workday_sensor
+      holiday_sensor: !input holiday_sensor
+      vacation_sensor: !input vacation_sensor
+      absence_sensor: !input absence_sensor
+      vacation_mode: !input vacation_mode
+      hot_after_sun_action: !input hot_after_sun_action
+      hot_after_sun_position: !input hot_after_sun_position
+      vacation_open_position: !input vacation_open_position
+      open_window_minutes: !input open_window_minutes
+      monday_open_time: !input monday_open_time
+      tuesday_open_time: !input tuesday_open_time
+      wednesday_open_time: !input wednesday_open_time
+      thursday_open_time: !input thursday_open_time
+      friday_open_time: !input friday_open_time
+      saturday_open_time: !input saturday_open_time
+      sunday_open_time: !input sunday_open_time
+      workday_open_time: !input workday_open_time
+      non_workday_open_time: !input non_workday_open_time
+      holiday_open_time: !input holiday_open_time
+      vacation_open_time: !input vacation_open_time
+      close_offset_jan: !input close_offset_jan
+      close_offset_feb: !input close_offset_feb
+      close_offset_mar: !input close_offset_mar
+      close_offset_apr: !input close_offset_apr
+      close_offset_may: !input close_offset_may
+      close_offset_jun: !input close_offset_jun
+      close_offset_jul: !input close_offset_jul
+      close_offset_aug: !input close_offset_aug
+      close_offset_sep: !input close_offset_sep
+      close_offset_oct: !input close_offset_oct
+      close_offset_nov: !input close_offset_nov
+      close_offset_dec: !input close_offset_dec
+      wd: "{{ now().weekday() }}"
+      per_day_open_time: >-
+        {% set times = [monday_open_time, tuesday_open_time, wednesday_open_time, thursday_open_time, friday_open_time, saturday_open_time, sunday_open_time] %}
+        {{ times[now().weekday()] }}
+      workday_on: "{{ workday_sensor != '' and is_state(workday_sensor, 'on') }}"
+      holiday_on: "{{ holiday_sensor != '' and is_state(holiday_sensor, 'on') }}"
+      vacation_on: "{{ vacation_sensor != '' and is_state(vacation_sensor, 'on') }}"
+      absence_on: "{{ absence_sensor != '' and is_state(absence_sensor, 'on') }}"
+      selected_open_time: >-
+        {% if vacation_on %}
+          {{ vacation_open_time }}
+        {% elif holiday_on %}
+          {{ holiday_open_time }}
+        {% elif workday_sensor != '' %}
+          {{ workday_open_time if workday_on else non_workday_open_time }}
+        {% else %}
+          {{ per_day_open_time }}
+        {% endif %}
+      open_ts: "{{ as_timestamp(today_at(selected_open_time)) }}"
+      now_ts: "{{ as_timestamp(now()) }}"
+      open_due: "{{ now_ts >= open_ts }}"
+      in_open_window: "{{ open_ts <= now_ts <= (open_ts + (open_window_minutes | int) * 60) }}"
+      sunrise_ok: "{{ (not respect_sunrise) or is_state('sun.sun', 'above_horizon') }}"
+      close_offset_min: >-
+        {% set offsets = [close_offset_jan, close_offset_feb, close_offset_mar, close_offset_apr, close_offset_may, close_offset_jun, close_offset_jul, close_offset_aug, close_offset_sep, close_offset_oct, close_offset_nov, close_offset_dec] %}
+        {{ offsets[now().month - 1] | int }}
+      next_setting_ts: "{{ as_timestamp(state_attr('sun.sun', 'next_setting')) }}"
+      sunset_today_ts: >-
+        {% set ns = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
+        {% set n = as_timestamp(now()) %}
+        {{ ns if ns > n and (ns - n) < 43200 else ns - 86400 }}
+      close_ts: "{{ (sunset_today_ts | float) + (close_offset_min | int) * 60 }}"
+      close_due: "{{ now_ts >= (close_ts | float) }}"
+      forecast_today_max: >-
+        {% set f = daily_forecast.get(weather_entity, {}).get('forecast', []) %}
+        {% if f | length > 0 and f[0].temperature is defined %}
+          {{ f[0].temperature | float }}
+        {% else %}
+          {{ state_attr(weather_entity, 'temperature') | float(-99) }}
+        {% endif %}
+      hot_day: "{{ forecast_today_max | float >= heat_threshold | float }}"
+      facade_sunny: "{{ is_state(sun_direct_sensor, 'on') }}"
+      any_not_open: >-
+        {{ expand(covers) | selectattr('state', 'ne', 'open') | list | count > 0 }}
+      any_not_closed: >-
+        {{ expand(covers) | selectattr('state', 'ne', 'closed') | list | count > 0 }}
+
+  - choose:
+      # Fermeture soir : prioritaire et active même en absence/vacances.
+      - conditions:
+          - condition: template
+            value_template: "{{ close_due and any_not_closed }}"
+        sequence:
+          - service: cover.close_cover
+            target:
+              entity_id: !input covers
+
+      # Réouverture après soleil façade lors d'une journée chaude.
+      - conditions:
+          - condition: trigger
+            id:
+              - facade_clear
+              - start
+          - condition: template
+            value_template: >-
+              {{ hot_day and open_due and sunrise_ok and not facade_sunny and not absence_on and any_not_open and hot_after_sun_action != 'none' }}
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ hot_after_sun_action == 'partial_open' }}"
+                sequence:
+                  - service: cover.set_cover_position
+                    target:
+                      entity_id: !input covers
+                    data:
+                      position: !input hot_after_sun_position
+            default:
+              - service: cover.open_cover
+                target:
+                  entity_id: !input covers
+
+      # Ouverture normale dans une fenêtre courte après l'heure prévue.
+      - conditions:
+          - condition: trigger
+            id:
+              - tick
+              - start
+              - sunrise
+          - condition: template
+            value_template: >-
+              {{ open_due and in_open_window and sunrise_ok and not hot_day and not absence_on and any_not_open and not (vacation_on and vacation_mode == 'keep_closed') }}
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ vacation_on and vacation_mode == 'partial_open' }}"
+                sequence:
+                  - service: cover.set_cover_position
+                    target:
+                      entity_id: !input covers
+                    data:
+                      position: !input vacation_open_position
+            default:
+              - service: cover.open_cover
+                target:
+                  entity_id: !input covers
