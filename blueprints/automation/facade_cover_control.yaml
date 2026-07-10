@@ -1,49 +1,133 @@
 blueprint:
-  name: Volets façade chaleur/saison v0.1
+  name: Facade Cover Control
   description: >
-    Gestion locale de volets par façade : horaires selon jour/travail/férié/vacances,
-    blocage d'ouverture les journées chaudes selon prévision météo daily, réouverture
-    optionnelle quand le soleil ne tape plus sur la façade, fermeture au coucher du
-    soleil avec offset mensuel réglable. V0.1 volontairement simple : nécessite un
-    binary_sensor "soleil direct façade" par façade.
+    Heat-aware and sun-aware cover control per facade/exposure. Handles daily
+    forecast maximum temperature, direct sun on the facade, per-day/workday
+    opening schedules, optional vacation/absence modes, optional persistent
+    status helper, partial hot-day reopening, and monthly sunset close offsets.
   domain: automation
   input:
     covers:
-      name: Volets de cette façade
-      description: Liste des volets à piloter ensemble pour cette exposition.
+      name: Covers
+      description: Covers/shutters controlled together for this facade. Prefer individual covers over a group if group states are unreliable.
       selector:
         entity:
           domain: cover
           multiple: true
 
     sun_direct_sensor:
-      name: Capteur soleil direct façade
-      description: Binary sensor à on quand le soleil tape sur cette façade/fenêtre solaire.
+      name: Facade direct-sun sensor
+      description: >
+        Optional binary sensor that is on while direct sun hits this facade/window group.
+        Use it if you already have a precise facade sun sensor. If you prefer not to
+        create a separate helper/sensor, set Sun detection mode to Solar window and
+        configure the facade azimuth and +/- solar window below instead.
+      default: ""
       selector:
         entity:
           domain: binary_sensor
 
-    status_helper:
-      name: Helper statut optionnel
+    sun_detection_mode:
+      name: Sun detection mode
       description: >
-        Input text optionnel, inspiré de CCA, utilisé comme petite mémoire persistante
-        par façade. Il stocke les actions du jour pour éviter les répétitions après
-        redémarrage/rechargement. Créer un input_text par instance/façade si utilisé.
+        How the blueprint decides that the sun is still hitting this facade.
+        Direct sensor uses the optional binary sensor above. Solar window uses sun.sun
+        azimuth/elevation directly. Direct sensor or solar window treats the facade as
+        sunny when either method says it is sunny.
+      default: direct_sensor
+      selector:
+        select:
+          options:
+            - label: Direct sensor only
+              value: direct_sensor
+            - label: Solar window only
+              value: solar_window
+            - label: Direct sensor or solar window
+              value: direct_sensor_or_solar_window
+
+    facade_azimuth:
+      name: Facade azimuth
+      description: >
+        Direction perpendicular to the facade/wall, in degrees from North.
+        Example: 145° means the facade points South-East. This is the center direction;
+        the next two settings define how many degrees before and after this direction
+        count as direct sun on the facade.
+      default: 145
+      selector:
+        number:
+          min: 0
+          max: 359
+          step: 1
+          unit_of_measurement: °
+          mode: box
+
+    solar_window_before:
+      name: Solar window before facade azimuth
+      description: >
+        Degrees to subtract from the facade azimuth to find the beginning of the sun
+        window. Example: facade 145° with 65° before starts at 80°.
+        Increase this if the facade heats early in the morning and covers must stay
+        closed sooner.
+      default: 65
+      selector:
+        number:
+          min: 0
+          max: 180
+          step: 1
+          unit_of_measurement: °
+          mode: box
+
+    solar_window_after:
+      name: Solar window after facade azimuth
+      description: >
+        Degrees to add to the facade azimuth to find the end of the sun window.
+        Example: facade 145° with 75° after ends at 220°. Increase or decrease this
+        to tune when hot-day reopening is allowed after the sun leaves the facade.
+      default: 75
+      selector:
+        number:
+          min: 0
+          max: 180
+          step: 1
+          unit_of_measurement: °
+          mode: box
+
+    solar_elevation_min:
+      name: Minimum solar elevation
+      description: >
+        Minimum sun elevation, in degrees, required for the solar window to count as
+        sunny. A small value such as 3° avoids reacting while the sun is still at the
+        horizon.
+      default: 3
+      selector:
+        number:
+          min: -10
+          max: 45
+          step: 0.5
+          unit_of_measurement: °
+          mode: box
+
+    status_helper:
+      name: Optional status helper
+      description: >
+        Optional input_text used as persistent per-facade memory, inspired by CCA.
+        It stores today's actions and forecast debug data to avoid repeated actions
+        after reloads/restarts. Create one input_text per facade if used.
       default: ""
       selector:
         entity:
           domain: input_text
 
     weather_entity:
-      name: Entité météo pour prévision max du jour
-      description: Utilisée avec weather.get_forecasts type daily.
+      name: Weather entity
+      description: Must support weather.get_forecasts with type daily. The first daily forecast temperature is used as today's maximum.
       selector:
         entity:
           domain: weather
 
     heat_threshold:
-      name: Seuil journée chaude
-      description: Si température max prévue >= seuil, l'ouverture matin est bloquée.
+      name: Hot-day threshold
+      description: If today's forecast maximum is greater than or equal to this value, morning opening is blocked during active heat-protection months.
       default: 25
       selector:
         number:
@@ -52,6 +136,44 @@ blueprint:
           step: 0.5
           unit_of_measurement: °C
           mode: box
+
+    heat_months:
+      name: Heat-protection months
+      description: Months where hot-day blocking is active. Outside these months, heat is ignored so covers can open for solar gains.
+      default:
+        - "5"
+        - "6"
+        - "7"
+        - "8"
+        - "9"
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: January
+              value: "1"
+            - label: February
+              value: "2"
+            - label: March
+              value: "3"
+            - label: April
+              value: "4"
+            - label: May
+              value: "5"
+            - label: June
+              value: "6"
+            - label: July
+              value: "7"
+            - label: August
+              value: "8"
+            - label: September
+              value: "9"
+            - label: October
+              value: "10"
+            - label: November
+              value: "11"
+            - label: December
+              value: "12"
 
     respect_sunrise:
       name: Respecter le lever du soleil
@@ -158,20 +280,20 @@ blueprint:
           domain: binary_sensor
 
     hot_after_sun_action:
-      name: Action journée chaude après fin du soleil façade
-      description: Que faire quand journée chaude et que le soleil ne tape plus sur cette façade.
+      name: Hot-day action after facade sun ends
+      description: What to do on hot days once direct sun no longer hits this facade.
       default: partial_open
       selector:
         select:
           options:
-            - label: Ne rien faire
+            - label: Do nothing
               value: none
-            - label: Ouvrir partiellement
+            - label: Open partially
               value: partial_open
-            - label: Ouvrir complètement
+            - label: Open fully
               value: full_open
     hot_after_sun_position:
-      name: Position réouverture partielle journée chaude
+      name: Hot-day partial reopen position
       default: 40
       selector:
         number:
@@ -182,8 +304,8 @@ blueprint:
           mode: slider
 
     open_window_minutes:
-      name: Fenêtre d'ouverture normale
-      description: Durée après l'heure d'ouverture pendant laquelle le blueprint peut ouvrir. Limite les réouvertures après fermeture manuelle.
+      name: Normal opening window
+      description: Minutes after the selected opening time during which normal opening may run. Limits reopen loops after manual closing.
       default: 45
       selector:
         number:
@@ -249,11 +371,6 @@ trigger:
   - platform: homeassistant
     event: start
     id: start
-  - platform: state
-    entity_id: !input sun_direct_sensor
-    from: "on"
-    to: "off"
-    id: facade_clear
   - platform: sun
     event: sunrise
     id: sunrise
@@ -275,9 +392,15 @@ action:
   - variables:
       covers: !input covers
       sun_direct_sensor: !input sun_direct_sensor
+      sun_detection_mode: !input sun_detection_mode
+      facade_azimuth: !input facade_azimuth
+      solar_window_before: !input solar_window_before
+      solar_window_after: !input solar_window_after
+      solar_elevation_min: !input solar_elevation_min
       status_helper: !input status_helper
       weather_entity: !input weather_entity
       heat_threshold: !input heat_threshold
+      heat_months: !input heat_months
       respect_sunrise: !input respect_sunrise
       workday_sensor: !input workday_sensor
       holiday_sensor: !input holiday_sensor
@@ -351,8 +474,28 @@ action:
         {% else %}
           {{ state_attr(weather_entity, 'temperature') | float(-99) }}
         {% endif %}
-      hot_day: "{{ forecast_today_max | float >= heat_threshold | float }}"
-      facade_sunny: "{{ is_state(sun_direct_sensor, 'on') }}"
+      heat_month_active: "{{ (now().month | string) in (heat_months | list) }}"
+      hot_day: "{{ heat_month_active and (forecast_today_max | float >= heat_threshold | float) }}"
+      direct_sensor_sunny: "{{ sun_direct_sensor != '' and is_state(sun_direct_sensor, 'on') }}"
+      sun_azimuth: "{{ state_attr('sun.sun', 'azimuth') | float(0) }}"
+      sun_elevation: "{{ state_attr('sun.sun', 'elevation') | float(-90) }}"
+      solar_window_start: "{{ ((facade_azimuth | float) - (solar_window_before | float)) % 360 }}"
+      solar_window_end: "{{ ((facade_azimuth | float) + (solar_window_after | float)) % 360 }}"
+      solar_window_sunny: >-
+        {% set az = sun_azimuth | float %}
+        {% set el = sun_elevation | float %}
+        {% set start = solar_window_start | float %}
+        {% set end = solar_window_end | float %}
+        {% set in_azimuth_window = (start <= end and start <= az <= end) or (start > end and (az >= start or az <= end)) %}
+        {{ el >= (solar_elevation_min | float) and in_azimuth_window }}
+      facade_sunny: >-
+        {% if sun_detection_mode == 'direct_sensor' %}
+          {{ direct_sensor_sunny }}
+        {% elif sun_detection_mode == 'solar_window' %}
+          {{ solar_window_sunny }}
+        {% else %}
+          {{ direct_sensor_sunny or solar_window_sunny }}
+        {% endif %}
       today_key: "{{ now().date() | string }}"
       helper_data: >-
         {% if status_helper != '' %}
@@ -386,13 +529,12 @@ action:
                     data:
                       entity_id: "{{ status_helper }}"
                       value: >-
-                        {{ dict(helper_data, v=1, closed=today_key, last_action='close', forecast_max=forecast_today_max | float, hot_day=hot_day, ts=as_timestamp(now()) | int) | to_json }}
+                        {{ dict(helper_data, v=1, closed=today_key, last_action='close', forecast_max=forecast_today_max | float, heat_month_active=heat_month_active, hot_day=hot_day, ts=as_timestamp(now()) | int) | to_json }}
 
       # Réouverture après soleil façade lors d'une journée chaude.
       - conditions:
           - condition: trigger
             id:
-              - facade_clear
               - start
               - tick
           - condition: template
@@ -422,7 +564,7 @@ action:
                     data:
                       entity_id: "{{ status_helper }}"
                       value: >-
-                        {{ dict(helper_data, v=1, hot_reopened=today_key, last_action='hot_reopen', forecast_max=forecast_today_max | float, hot_day=hot_day, ts=as_timestamp(now()) | int) | to_json }}
+                        {{ dict(helper_data, v=1, hot_reopened=today_key, last_action='hot_reopen', forecast_max=forecast_today_max | float, heat_month_active=heat_month_active, hot_day=hot_day, ts=as_timestamp(now()) | int) | to_json }}
 
       # Ouverture normale dans une fenêtre courte après l'heure prévue.
       - conditions:
@@ -458,4 +600,4 @@ action:
                     data:
                       entity_id: "{{ status_helper }}"
                       value: >-
-                        {{ dict(helper_data, v=1, opened=today_key, last_action='open', forecast_max=forecast_today_max | float, hot_day=hot_day, ts=as_timestamp(now()) | int) | to_json }}
+                        {{ dict(helper_data, v=1, opened=today_key, last_action='open', forecast_max=forecast_today_max | float, heat_month_active=heat_month_active, hot_day=hot_day, ts=as_timestamp(now()) | int) | to_json }}

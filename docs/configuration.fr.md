@@ -7,7 +7,7 @@ Créer une automatisation par façade / exposition.
 Pour chaque instance, choisir :
 
 - les volets de cette façade ;
-- un binary sensor qui vaut `on` quand le soleil tape sur cette façade ;
+- soit un binary sensor qui vaut `on` quand le soleil tape sur cette façade, soit les paramètres de fenêtre solaire intégrée ;
 - une entité météo compatible avec `weather.get_forecasts` en `type: daily` ;
 - les horaires d’ouverture ;
 - le seuil de journée chaude ;
@@ -31,16 +31,62 @@ Le helper stocke aussi la température max prévue utilisée pour la dernière a
 
 Pour la chaleur, choisir une entité météo dont la prévision daily contient bien la température max de la journée. Dans cette installation, `weather.tacoignieres` / Météo-France semble être un meilleur candidat qu’une entité météo dont la température affichée est surtout la température actuelle.
 
-## Capteur soleil direct
+## Détection soleil direct
 
-Le blueprint attend un capteur binaire :
+Le blueprint propose trois modes de détection du soleil direct sur la façade :
+
+```text
+Capteur direct seulement
+Fenêtre solaire seulement
+Capteur direct ou fenêtre solaire
+```
+
+### Capteur direct
+
+Utiliser ce mode si vous avez déjà un capteur binaire :
 
 ```text
 on  = le soleil tape sur cette façade
 off = le soleil ne tape plus sur cette façade
 ```
 
-Ce capteur peut être créé avec un template Home Assistant basé sur l’azimut/élévation de `sun.sun`, ou par une autre intégration.
+Ce capteur peut être créé avec un template Home Assistant basé sur l’azimut/élévation de `sun.sun`, ou par une autre intégration. Il devient optionnel si vous utilisez la fenêtre solaire intégrée.
+
+### Fenêtre solaire intégrée
+
+Le mode fenêtre solaire utilise directement l’azimut et l’élévation de `sun.sun`. Il évite de créer un binary sensor séparé pour chaque façade.
+
+Paramètres :
+
+```yaml
+facade_azimuth: 145
+solar_window_before: 65
+solar_window_after: 75
+solar_elevation_min: 3
+```
+
+`facade_azimuth` correspond à la direction perpendiculaire à la façade / au mur, en degrés depuis le Nord. C’est le centre de la fenêtre solaire, pas le début ni la fin.
+
+`solar_window_before` correspond aux degrés à retirer à l’azimut de façade.
+
+`solar_window_after` correspond aux degrés à ajouter à l’azimut de façade.
+
+Exemple :
+
+```text
+facade_azimuth = 145°
+solar_window_before = 65°  -> la fenêtre commence à 80°
+solar_window_after  = 75°  -> la fenêtre finit à 220°
+```
+
+Dans cet exemple, la façade est considérée au soleil si :
+
+```text
+l’azimut du soleil est entre 80° et 220°
+et l’élévation solaire est >= 3°
+```
+
+Pour une façade Est ou Sud-Est qui chauffe tôt le matin, augmenter `solar_window_before` permet d’éviter que les volets ne rouvrent trop tôt alors que le soleil du matin tape encore directement.
 
 ## Logique journée chaude
 
@@ -66,7 +112,7 @@ température max prévue >= seuil chaleur
 
 alors l’ouverture normale du matin est ignorée.
 
-Quand le capteur soleil direct passe à `off`, le blueprint peut rouvrir les volets :
+Quand la détection choisie indique que la façade n’est plus au soleil, le blueprint peut rouvrir les volets :
 
 - pas du tout ;
 - partiellement ;

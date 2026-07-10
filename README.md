@@ -9,6 +9,7 @@ This blueprint manages covers/shutters by facade or exposure. It is designed for
 - Control multiple covers as one facade group.
 - Block morning opening on hot days based on the daily forecast maximum temperature.
 - Reopen after the sun no longer hits the facade.
+- Optional integrated solar window using `sun.sun` azimuth/elevation, so a separate direct-sun binary sensor is not required.
 - Optional partial reopening after a hot day sun block.
 - Per-day opening times.
 - Optional workday, holiday, vacation, and absence/security sensors.
@@ -70,24 +71,36 @@ cover.volet_cuisine
 cover.volet_salle_a_manger
 ```
 
-Use a facade direct-sun binary sensor such as:
+Use either a facade direct-sun binary sensor such as:
 
 ```text
 binary_sensor.facade_est_sud_sun_direct
+```
+
+or use the integrated solar window. Example for a South-East facade whose perpendicular wall direction is 145°:
+
+```yaml
+sun_detection_mode: solar_window
+facade_azimuth: 145
+solar_window_before: 65   # 145 - 65 = 80° window start
+solar_window_after: 75    # 145 + 75 = 220° window end
+solar_elevation_min: 3
 ```
 
 Disable any other automation controlling the same covers during the test to avoid conflicts.
 
 ## Status
 
-Current version: `0.1.1`
+Current version: `0.1.2`
 
 This is an early version. Test on a limited set of covers before deploying widely.
 
 ## Documentation
 
 - [Configuration guide — English](docs/configuration.en.md)
+- [Roadmap / ideas — English](docs/roadmap.en.md)
 - [Guide de configuration — Français](docs/configuration.fr.md)
+- [Feuille de route / idées — Français](docs/roadmap.fr.md)
 - [README français](README.fr.md)
 
 ## License

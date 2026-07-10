@@ -7,7 +7,7 @@ Create one automation instance per facade/exposure.
 For each instance, select:
 
 - the covers on this facade;
-- a binary sensor that is `on` when the facade is in direct sun;
+- either a binary sensor that is `on` when the facade is in direct sun, or the integrated solar window settings;
 - a weather entity that supports `weather.get_forecasts` with `type: daily`;
 - opening times;
 - hot day threshold;
@@ -31,16 +31,62 @@ The helper also stores the forecast maximum temperature used for the last action
 
 For heat decisions, prefer a weather entity whose daily forecast temperature is the real daily maximum. In this setup, `weather.tacoignieres` / Météo-France is usually a better candidate than a weather entity whose visible temperature is only the current temperature.
 
-## Direct sun sensor
+## Direct sun detection
 
-The blueprint expects a binary sensor:
+The blueprint supports three direct-sun detection modes:
+
+```text
+Direct sensor only
+Solar window only
+Direct sensor or solar window
+```
+
+### Direct sensor
+
+Use this mode if you already have a binary sensor:
 
 ```text
 on  = sun is hitting this facade
 off = sun is no longer hitting this facade
 ```
 
-You may create this sensor with Home Assistant templates using `sun.sun` azimuth/elevation, or with any other integration.
+You may create this sensor with Home Assistant templates using `sun.sun` azimuth/elevation, or with any other integration. The sensor is optional if you use the integrated solar window.
+
+### Solar window
+
+Solar window mode uses `sun.sun` azimuth and elevation directly. It avoids having to create one binary sensor per facade.
+
+Configure:
+
+```yaml
+facade_azimuth: 145
+solar_window_before: 65
+solar_window_after: 75
+solar_elevation_min: 3
+```
+
+`facade_azimuth` is the direction perpendicular to the facade/wall, in degrees from North. It is the center of the window, not the start/end.
+
+`solar_window_before` means degrees to subtract from the facade azimuth.
+
+`solar_window_after` means degrees to add to the facade azimuth.
+
+Example:
+
+```text
+facade_azimuth = 145°
+solar_window_before = 65°  -> window starts at 80°
+solar_window_after  = 75°  -> window ends at 220°
+```
+
+In that example, the facade is considered sunny when:
+
+```text
+sun azimuth is between 80° and 220°
+and sun elevation is >= 3°
+```
+
+For east-facing or south-east-facing facades that heat early in the morning, increase `solar_window_before` so covers do not reopen too early while morning sun is still strong.
 
 ## Hot day logic
 
@@ -66,7 +112,7 @@ forecast max >= heat threshold
 
 then the normal morning opening is skipped.
 
-When the direct sun sensor turns `off`, the blueprint can reopen the covers:
+When the selected sun detection says the facade is no longer sunny, the blueprint can reopen the covers:
 
 - not at all;
 - partially;

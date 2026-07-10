@@ -9,6 +9,7 @@ Ce blueprint est prévu pour les maisons où chaque façade reçoit le soleil à
 - Pilotage de plusieurs volets pour une même façade/exposition.
 - Blocage de l’ouverture du matin lors des journées chaudes, basé sur la température max prévue.
 - Réouverture quand le soleil ne tape plus sur la façade.
+- Fenêtre solaire intégrée optionnelle basée sur l’azimut/élévation de `sun.sun`, pour éviter de dépendre obligatoirement d’un binary sensor soleil direct.
 - Réouverture complète ou partielle configurable.
 - Horaires d’ouverture par jour de la semaine.
 - Capteurs optionnels : jour travaillé, jour férié, vacances, absence/sécurité.
@@ -70,24 +71,36 @@ cover.volet_cuisine
 cover.volet_salle_a_manger
 ```
 
-Avec un capteur soleil direct de façade, par exemple :
+Avec soit un capteur soleil direct de façade, par exemple :
 
 ```text
 binary_sensor.facade_est_sud_sun_direct
+```
+
+soit la fenêtre solaire intégrée. Exemple pour une façade Sud-Est dont la perpendiculaire du mur est à 145° :
+
+```yaml
+sun_detection_mode: solar_window
+facade_azimuth: 145
+solar_window_before: 65   # 145 - 65 = début de fenêtre à 80°
+solar_window_after: 75    # 145 + 75 = fin de fenêtre à 220°
+solar_elevation_min: 3
 ```
 
 Pendant les tests, désactiver les autres automatisations qui pilotent les mêmes volets pour éviter les conflits.
 
 ## Statut
 
-Version actuelle : `0.1.1`
+Version actuelle : `0.1.2`
 
 Version initiale. À tester sur un petit groupe de volets avant généralisation.
 
 ## Documentation
 
 - [Guide de configuration — Français](docs/configuration.fr.md)
+- [Feuille de route / idées — Français](docs/roadmap.fr.md)
 - [Configuration guide — English](docs/configuration.en.md)
+- [Roadmap / ideas — English](docs/roadmap.en.md)
 
 ## Licence
 
