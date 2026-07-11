@@ -53,7 +53,7 @@ blueprint:
         Exemple : 145° signifie que la façade pointe vers le Sud-Est. C’est la direction centrale ;
         les deux réglages suivants définissent combien de degrés avant et après cette direction
         comptent comme soleil direct sur la façade.
-      default:
+      default: 180
       selector:
         number:
           min: 0
@@ -69,7 +69,7 @@ blueprint:
         Exemple : façade 145° avec 65° avant commence à 80°.
         Augmentez cette valeur si la façade chauffe tôt le matin et si les volets doivent rester
         fermés plus longtemps.
-      default:
+      default: 90
       selector:
         number:
           min: 0
@@ -84,7 +84,7 @@ blueprint:
         Degrés à ajouter à l’azimut de façade pour déterminer la fin de la fenêtre solaire.
         Exemple : façade 145° avec 75° après finit à 220°. Augmentez ou diminuez cette valeur
         pour ajuster le moment où la réouverture est autorisée après que le soleil quitte la façade.
-      default:
+      default: 90
       selector:
         number:
           min: 0
@@ -99,7 +99,7 @@ blueprint:
         Élévation minimale du soleil, en degrés, nécessaire pour que la fenêtre solaire compte
         comme ensoleillée. Une petite valeur comme 3° évite de réagir lorsque le soleil est encore
         à l’horizon.
-      default:
+      default: 3
       selector:
         number:
           min: -10

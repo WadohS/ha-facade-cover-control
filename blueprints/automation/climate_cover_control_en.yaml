@@ -52,7 +52,7 @@ blueprint:
         Example: 145° means the facade points South-East. This is the center direction;
         the next two settings define how many degrees before and after this direction
         count as direct sun on the facade.
-      default:
+      default: 180
       selector:
         number:
           min: 0
@@ -68,7 +68,7 @@ blueprint:
         window. Example: facade 145° with 65° before starts at 80°.
         Increase this if the facade heats early in the morning and covers must stay
         closed sooner.
-      default:
+      default: 90
       selector:
         number:
           min: 0
@@ -83,7 +83,7 @@ blueprint:
         Degrees to add to the facade azimuth to find the end of the sun window.
         Example: facade 145° with 75° after ends at 220°. Increase or decrease this
         to tune when hot-day reopening is allowed after the sun leaves the facade.
-      default:
+      default: 90
       selector:
         number:
           min: 0
@@ -98,7 +98,7 @@ blueprint:
         Minimum sun elevation, in degrees, required for the solar window to count as
         sunny. A small value such as 3° avoids reacting while the sun is still at the
         horizon.
-      default:
+      default: 3
       selector:
         number:
           min: -10
