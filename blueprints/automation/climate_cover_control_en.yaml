@@ -315,6 +315,16 @@ blueprint:
           unit_of_measurement: min
           mode: slider
 
+    respect_manual_evening_changes:
+      name: Respect manual evening changes
+      description: >
+        If enabled, when a cover is manually reopened after the evening close time,
+        the blueprint will not automatically close it again during that night. Useful for
+        manual evening/night ventilation without disabling the automation.
+      default: true
+      selector:
+        boolean: {}
+
     close_offset_jan:
       name: January close offset
       default: -15
@@ -411,6 +421,7 @@ action:
       hot_after_sun_position: !input hot_after_sun_position
       vacation_open_position: !input vacation_open_position
       open_window_minutes: !input open_window_minutes
+      respect_manual_evening_changes: !input respect_manual_evening_changes
       monday_open_time: !input monday_open_time
       tuesday_open_time: !input tuesday_open_time
       wednesday_open_time: !input wednesday_open_time
@@ -512,12 +523,23 @@ action:
         {{ expand(covers) | selectattr('state', 'ne', 'open') | list | count > 0 }}
       any_not_closed: >-
         {{ expand(covers) | selectattr('state', 'ne', 'closed') | list | count > 0 }}
+      evening_manual_override_active: >-
+        {% set close_time = close_ts | float %}
+        {% set ns = namespace(active=false) %}
+        {% if respect_manual_evening_changes and close_due %}
+          {% for cover in expand(covers) %}
+            {% if cover.state != 'closed' and as_timestamp(cover.last_changed) > close_time %}
+              {% set ns.active = true %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        {{ ns.active }}
 
   - choose:
       # Evening close: priority path, still active during absence/vacation.
       - conditions:
           - condition: template
-            value_template: "{{ close_due and any_not_closed and not closed_today }}"
+            value_template: "{{ close_due and any_not_closed and not closed_today and not evening_manual_override_active }}"
         sequence:
           - service: cover.close_cover
             target:
@@ -541,7 +563,7 @@ action:
               - tick
           - condition: template
             value_template: >-
-              {{ hot_day and open_due and sunrise_ok and not facade_sunny and not absence_on and any_not_open and hot_after_sun_action != 'none' and not hot_reopened_today }}
+              {{ hot_day and open_due and not close_due and sunrise_ok and not facade_sunny and not absence_on and any_not_open and hot_after_sun_action != 'none' and not hot_reopened_today }}
         sequence:
           - choose:
               - conditions:
